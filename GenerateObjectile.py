@@ -47,38 +47,33 @@ class OObject():
         
         self.tag = None
         
+        #draw curve 1
         if type == 0:
             #generates loft curves where bottom curve scales/rotates
             self.c1 = geo.Duplicate()
             if self.scale > 0: self.c1.Scale(self.scale)
             if self.rotation > 0: self.c1.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
-            
-            self.c2 = geo.Duplicate()
-            self.c2.Translate(0,0,self.height)
-            
-            self.c3 = geo.Duplicate()
-            self.c3.Translate(0,0,h_max)
-        elif type == 1:
-            #generates loft curves where middle curve scales/rotates
+        else:
             self.c1 = geo
-            
+
+        #draw curve 2
+        if type == 1:
             self.c2 = geo.Duplicate()
             if self.scale > 0: self.c2.Scale(self.scale)
             if self.rotation > 0: self.c2.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
             self.c2.Translate(0,0,self.height)
-            
-            self.c3 = geo.Duplicate()
-            self.c3.Translate(0,0,h_max)
-        elif type == 2:
-            #generates loft curves where top curve scales/rotates
-            self.c1 = geo
-            
+        else:
             self.c2 = geo.Duplicate()
             self.c2.Translate(0,0,self.height)
-            
+        
+        #draw curve 3
+        if type == 2:
             self.c3 = geo.Duplicate()
             if self.scale > 0: self.c3.Scale(self.scale)
             if self.rotation > 0: self.c3.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
+            self.c3.Translate(0,0,h_max)
+        else:
+            self.c3 = geo.Duplicate()
             self.c3.Translate(0,0,h_max)
             
         self.surf = Rhino.Geometry.Brep.CreateFromLoft([self.c1, self.c2, self.c3], Rhino.Geometry.Point3d.Unset, Rhino.Geometry.Point3d.Unset, Rhino.Geometry.LoftType.Straight, False)[0]
