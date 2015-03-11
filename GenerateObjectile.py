@@ -1,5 +1,6 @@
 import Rhino
 import scriptcontext
+import System.Drawing
 
 
 class Objectile():
@@ -30,11 +31,11 @@ class Objectile():
                         temp = self.base_geo.DuplicateCurve()
                         temp = OObject(temp, (self.rotation_max/self.rotation_steps)*i, (self.scale_max/self.scale_steps)*j, (self.height_max/self.height_steps)*k, self.height_max, m)
                         self.objects[(m, i,j,k)] = temp
-                        self.objects[(m, i, j, k)].MakeTag()
-                        self.objects[(m, i,j,k)].Move(self.X_spacing * i + m * (self.X_spacing * self.rotation_steps + self.X_spacing * 2), self.Y_spacing * j, self.Z_spacing * k)
+                        self.objects[(m, i, j, k)].MakeTag(str((m, i, j, k)))
+                        self.objects[(m, i, j, k)].Move(self.X_spacing * i + m * (self.X_spacing * self.rotation_steps + self.X_spacing * 2), self.Y_spacing * j, self.Z_spacing * k)
         
         for k, object in self.objects.iteritems():
-            object.Bake()
+            object.Bake(str((m, i, j, k)))
        
         
 class OObject():
@@ -46,6 +47,7 @@ class OObject():
         self.height = h_step
         
         self.tag = None
+        self.show_curves = True
         
         #draw curve 1
         if type == 0:
@@ -79,16 +81,60 @@ class OObject():
         self.surf = Rhino.Geometry.Brep.CreateFromLoft([self.c1, self.c2, self.c3], Rhino.Geometry.Point3d.Unset, Rhino.Geometry.Point3d.Unset, Rhino.Geometry.LoftType.Straight, False)[0]
         self.surf.Flip()
         
-    def MakeTag(self):
-        self.tag = Rhino.Geometry.TextDot("Rotation: " + str(self.rotation) + "\nScale: " + str(self.scale) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
+    def MakeTag(self, label_text):
+        self.tag = Rhino.Geometry.TextDot(label_text + "\nRotation: " + str(self.rotation) + "\nScale: " + str(self.scale) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
     
     def Move(self, x, y, z):
-        if self.surf: self.surf.Translate(x, y, z)
-        if self.tag: self.tag.Translate(x, y, z)
+        if self.surf: 
+            self.surf.Translate(x, y, z)
+        if self.tag: 
+            self.tag.Translate(x, y, z)
+        if self.show_curves:
+            self.c1.Translate(x, y, z)
+            self.c2.Translate(x, y, z)
+            self.c3.Translate(x, y, z)
         
-    def Bake(self):
-        if self.surf: scriptcontext.doc.Objects.AddBrep(self.surf)
-        if self.tag: scriptcontext.doc.Objects.AddTextDot(self.tag)
+    def Bake(self, group_name):
+        group = scriptcontext.doc.Groups.Add(group_name)
+        
+        if self.surf:
+            layer = Rhino.DocObjects.Layer()
+            layer.Name = "Surface"
+            layer.Color = System.Drawing.Color.Goldenrod
+            layer = scriptcontext.doc.Layers.Add(layer)
+            
+            attr = Rhino.DocObjects.ObjectAttributes()
+            attr.AddToGroup(group)
+            attr.LayerIndex = scriptcontext.doc.Layers.Find("Surface", True)
+            
+            srf_guid = scriptcontext.doc.Objects.AddBrep(self.surf, attr)
+            #scriptcontext.doc.Groups.AddToGroup(group, srf_guid)
+        if self.tag:
+            layer = Rhino.DocObjects.Layer()
+            layer.Name = "Tag"
+            layer.Color = System.Drawing.Color.Gray 
+            layer = scriptcontext.doc.Layers.Add(layer)
+            
+            attr = Rhino.DocObjects.ObjectAttributes()
+            attr.AddToGroup(group)
+            attr.LayerIndex = scriptcontext.doc.Layers.Find("Tag", True)
+            
+            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.tag, attr)
+            #scriptcontext.doc.Groups.AddToGroup(group, tag_guid)
+        if self.show_curves:
+            layer = Rhino.DocObjects.Layer()
+            layer.Name = "Curves"
+            layer.Color = System.Drawing.Color.Magenta 
+            layer = scriptcontext.doc.Layers.Add(layer)
+            
+            attr = Rhino.DocObjects.ObjectAttributes()
+            attr.AddToGroup(group)
+            attr.LayerIndex = scriptcontext.doc.Layers.Find("Curves", True)
+            
+            c1_guid = scriptcontext.doc.Objects.AddCurve(self.c1, attr)
+            c2_guid = scriptcontext.doc.Objects.AddCurve(self.c2, attr)
+            c3_guid = scriptcontext.doc.Objects.AddCurve(self.c3, attr)
+            #scriptcontext.doc.Groups.AddToGroup(group, (c1_guid, c2_guid, c3_guid))
         
 if __name__=="__main__":
     test, base_geo = Rhino.Input.RhinoGet.GetOneObject("Select geo to generate objectile", False, None)
