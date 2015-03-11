@@ -22,7 +22,7 @@ class Objectile():
         self.Z_spacing = 20
         
         self.objects = {}
-       
+    
     def generate(self):
         for m in range (3):
             for i in range(0, self.rotation_steps):
@@ -36,8 +36,8 @@ class Objectile():
         
         for k, object in self.objects.iteritems():
             object.Bake(str((m, i, j, k)))
-       
-        
+
+
 class OObject():
     
     def __init__(self, geo, r_step, s_step, h_step, h_max, type):
@@ -80,62 +80,51 @@ class OObject():
             
         self.surf = Rhino.Geometry.Brep.CreateFromLoft([self.c1, self.c2, self.c3], Rhino.Geometry.Point3d.Unset, Rhino.Geometry.Point3d.Unset, Rhino.Geometry.LoftType.Straight, False)[0]
         self.surf.Flip()
-        
+    
     def MakeTag(self, label_text):
         self.tag = Rhino.Geometry.TextDot(label_text + "\nRotation: " + str(self.rotation) + "\nScale: " + str(self.scale) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
     
     def Move(self, x, y, z):
         if self.surf: 
             self.surf.Translate(x, y, z)
-        if self.tag: 
+        
+        if self.tag:
             self.tag.Translate(x, y, z)
+        
         if self.show_curves:
             self.c1.Translate(x, y, z)
             self.c2.Translate(x, y, z)
             self.c3.Translate(x, y, z)
-        
+    
     def Bake(self, group_name):
         group = scriptcontext.doc.Groups.Add(group_name)
         
         if self.surf:
-            layer = Rhino.DocObjects.Layer()
-            layer.Name = "Surface"
-            layer.Color = System.Drawing.Color.Goldenrod
-            layer = scriptcontext.doc.Layers.Add(layer)
-            
-            attr = Rhino.DocObjects.ObjectAttributes()
-            attr.AddToGroup(group)
-            attr.LayerIndex = scriptcontext.doc.Layers.Find("Surface", True)
-            
+            attr = GenerateAttributes("Surface", System.Drawing.Color.Goldenrod, group)
             srf_guid = scriptcontext.doc.Objects.AddBrep(self.surf, attr)
-            #scriptcontext.doc.Groups.AddToGroup(group, srf_guid)
+        
         if self.tag:
-            layer = Rhino.DocObjects.Layer()
-            layer.Name = "Tag"
-            layer.Color = System.Drawing.Color.Gray 
-            layer = scriptcontext.doc.Layers.Add(layer)
-            
-            attr = Rhino.DocObjects.ObjectAttributes()
-            attr.AddToGroup(group)
-            attr.LayerIndex = scriptcontext.doc.Layers.Find("Tag", True)
-            
+            attr = GenerateAttributes("Tag", System.Drawing.Color.Gray, group)
             tag_guid = scriptcontext.doc.Objects.AddTextDot(self.tag, attr)
-            #scriptcontext.doc.Groups.AddToGroup(group, tag_guid)
+        
         if self.show_curves:
-            layer = Rhino.DocObjects.Layer()
-            layer.Name = "Curves"
-            layer.Color = System.Drawing.Color.Magenta 
-            layer = scriptcontext.doc.Layers.Add(layer)
-            
-            attr = Rhino.DocObjects.ObjectAttributes()
-            attr.AddToGroup(group)
-            attr.LayerIndex = scriptcontext.doc.Layers.Find("Curves", True)
-            
+            attr = GenerateAttributes("Curves", System.Drawing.Color.Magenta, group)
             c1_guid = scriptcontext.doc.Objects.AddCurve(self.c1, attr)
             c2_guid = scriptcontext.doc.Objects.AddCurve(self.c2, attr)
             c3_guid = scriptcontext.doc.Objects.AddCurve(self.c3, attr)
-            #scriptcontext.doc.Groups.AddToGroup(group, (c1_guid, c2_guid, c3_guid))
-        
+
+def GenerateAttributes(layer_name, color, group):
+    layer = Rhino.DocObjects.Layer()
+    layer.Name = layer_name
+    layer.Color = color 
+    layer = scriptcontext.doc.Layers.Add(layer)
+    
+    attribute = Rhino.DocObjects.ObjectAttributes()
+    attribute.AddToGroup(group)
+    attribute.LayerIndex = scriptcontext.doc.Layers.Find(layer_name, True)
+    
+    return attribute
+
 if __name__=="__main__":
     test, base_geo = Rhino.Input.RhinoGet.GetOneObject("Select geo to generate objectile", False, None)
     if test == Rhino.Commands.Result.Success:
