@@ -37,7 +37,8 @@ class Objectile():
     def Generate(self):
         for m in range (6):
             #todo range(min, stepval(stepscount+1), stepval) for all loops...
-            #todo change counters from (m,i,j,k) to (i,j,k,l)...
+			#todo debate using xrange or frange function to work with floats
+            #todo change counters from (m,i,j,k) to (i,j,k,l), or just change to appropriate names...
             for i in range(0, self.rotation_stepcount + 1):
                 for j in range(0, self.scale_stepcount + 1):
                     for k in range(1, self.height_stepcount):
