@@ -4,29 +4,33 @@ import System.Drawing
 
 
 class Objectile():
-    #todo make a function which writes all the Objectile data to a spreadsheet...
-    
-    def __init__(self, geo, s_max, r_max, h_max):
+    def __init__(self, geo, s_max, r_max, h_max, height):
         
-        #set user-input values
         self.base_geo = geo
+        self.height = float(height)
         
-        self.scale_max = s_max
-        self.rotation_max = r_max
-        self.height_max = h_max
+        self.scale_max = float(s_max)
+        self.rotation_max = float(r_max)
+        self.height_max = float(h_max)
         
-        #set default values
         self.scale_min = 1
-        self.rotation_min = 0
-        self.height_min = 0
+        self.rotation_min = 15.25
+        self.height_min = 0.0
         
-        self.scale_stepcount = 5
-        self.rotation_stepcount = 5
-        self.height_stepcount = 5
+        self.scale_stepcount = 4
+        self.rotation_stepcount = 4
+        self.height_stepcount = 4
         
-        self.scale_stepval = (self.scale_max - self.scale_min)/self.scale_stepcount
-        self.rotation_stepval = (self.rotation_max - self.rotation_min)/self.rotation_stepcount
-        self.height_stepval = (self.height_max - self.height_min)/self.height_stepcount
+        self.scale_stepval = (self.scale_max - self.scale_min)/float(self.scale_stepcount)
+        self.rotation_stepval = (self.rotation_max - self.rotation_min)/float(self.rotation_stepcount)
+        self.height_stepval = (self.height_max - self.height_min)/float(self.height_stepcount)
+        
+        if self.height_min == 0.0:
+            self.height_min = self.height_stepval
+            self.height_stepcount = self.height_stepcount - 1
+        if self.height_max == self.height:
+            self.height_max = self.height - self.height_stepval
+            self.height_stepcount = self.height_stepcount - 1
         
         self.X_spacing = 20
         self.Y_spacing = 20
@@ -35,21 +39,26 @@ class Objectile():
         self.objects = {}
     
     def Generate(self):
-        for m in range (6):
-            #todo range(min, stepval(stepscount+1), stepval) for all loops...
-			#todo debate using xrange or frange function to work with floats
-            #todo change counters from (m,i,j,k) to (i,j,k,l), or just change to appropriate names...
-            for i in range(0, self.rotation_stepcount + 1):
-                for j in range(0, self.scale_stepcount + 1):
-                    for k in range(1, self.height_stepcount):
-                        #todo make a tuple that will contain the equipvalent of (m,i,j,k)...
-                        self.objects[(m, i, j, k-1)] = OObject(self.base_geo, (((self.scale_max - self.scale_min)/self.scale_stepcount)*j)+self.scale_min, (((self.rotation_max - self.rotation_min)/self.rotation_stepcount)*i)+self.rotation_min, (self.height_max/self.height_stepcount)*k, self.height_max, m)
-                        self.objects[(m, i, j, k-1)].Generate()
-                        self.objects[(m, i, j, k-1)].MakeTag(str((m, i, j, k-1)))
-                        self.objects[(m, i, j, k-1)].Move(self.X_spacing * i + m * (self.X_spacing * self.rotation_stepcount + self.X_spacing * 2), self.Y_spacing * (j+1), self.Z_spacing * (k-1))
+        for f in range(6):
+            for s in frange(self.scale_min, self.scale_stepval * (self.scale_stepcount + 1) + self.scale_min, self.scale_stepval):
+                for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
+                    for h in frange(self.height_min, self.height_stepval * (self.height_stepcount + 1) + self.height_min, self.height_stepval):
+                        matrix_position = (f, int(round((s-self.scale_min)/self.scale_stepval)), int(round((r-self.rotation_min)/self.rotation_stepval)), int(round((h-self.height_min)/self.height_stepval)))
+                        self.objects[matrix_position] = OObject(self.base_geo, s, r, h, self.height, f)
+                        self.objects[matrix_position].Generate()
+                        self.objects[matrix_position].MarkProperties(str(matrix_position))
+                        self.objects[matrix_position].Move(self.X_spacing * matrix_position[1] + matrix_position[0] * (self.X_spacing * self.scale_stepcount + self.X_spacing * 2), self.Y_spacing * (matrix_position[2] + 1), self.Z_spacing * matrix_position[3])
         
-        for k, object in self.objects.iteritems():
-            object.Bake(str((m, i, j, k)))
+    def Bake(self):
+        for key, object in self.objects.iteritems():
+            object.Bake(str(key))
+    
+    #todo make a function which writes all the Objectile data to a spreadsheet...
+    def ExportCSV(self, filename):
+        with open(filename + ".csv", 'w') as file:
+            file.write("Matrix Family, Matrix X, Matrix Y, Matrix Z, Scale Value, Rotation Value, Height Value, Overall Height\n")
+            for key, object in self.objects.iteritems():
+                file.write(str(key)[1:-1] + ", " + str(object.scale) + ", " + str(object.rotation) + ", " + str(object.height) + ", " + str(object.max_height) + "\n")
 
 
 class OObject():
@@ -64,7 +73,9 @@ class OObject():
         
         self.type = type
         
-        self.tag = None
+        self.matrix_dot = None
+        self.centroid_dot = None
+        self.properties_dot = None
         
     def Generate(self):
         #draw curve 1
@@ -96,15 +107,31 @@ class OObject():
         self.surf = Rhino.Geometry.Brep.CreateFromLoft([self.c1, self.c2, self.c3], Rhino.Geometry.Point3d.Unset, Rhino.Geometry.Point3d.Unset, Rhino.Geometry.LoftType.Straight, False)[0]
         self.surf.Flip()
     
-    def MakeTag(self, label_text):
-        self.tag = Rhino.Geometry.TextDot(label_text + "\nRotation: " + str(self.rotation) + "\nScale: " + str(self.scale) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
-    
+    def MarkProperties(self, label_text):
+        self.matrix_dot = Rhino.Geometry.TextDot(str(label_text)[1:-1], Rhino.Geometry.Point3d.Origin)
+        self.centroid_dot = Rhino.Geometry.TextDot("Centroid", Rhino.Geometry.VolumeMassProperties.Compute(self.surf).Centroid)
+        
+        if self.type == 0 or self.type == 3 or self.type == 5:
+            loc = self.c1.PointAtStart
+        elif self.type == 1 or self.type == 3 or self.type == 4:
+            loc = self.c2.PointAtStart
+        elif self.type == 2 or self.type == 4 or self.type == 5:
+            loc = self.c3.PointAtStart
+        
+        self.properties_dot = Rhino.Geometry.TextDot("Scale: " + str(self.scale) + "\nRotation: " + str(self.rotation) + "\nHeight: " + str(self.height), loc)
+            
     def Move(self, x, y, z):
         if self.surf: 
             self.surf.Translate(x, y, z)
         
-        if self.tag:
-            self.tag.Translate(x, y, z)
+        if self.matrix_dot:
+            self.matrix_dot.Translate(x, y, z)
+            
+        if self.centroid_dot:
+            self.centroid_dot.Translate(x, y, z)
+            
+        if self.properties_dot:
+            self.properties_dot.Translate(x, y, z)
         
         if self.c1 and self.c2 and self.c3:
             self.c1.Translate(x, y, z)
@@ -117,10 +144,18 @@ class OObject():
         if self.surf:
             attr = GenerateAttributes("Surface", System.Drawing.Color.Goldenrod, group)
             srf_guid = scriptcontext.doc.Objects.AddBrep(self.surf, attr)
+            
+        if self.centroid_dot:
+            attr = GenerateAttributes("Centroid", System.Drawing.Color.Cyan, group)
+            centroid_guid = scriptcontext.doc.Objects.AddTextDot(self.centroid_dot, attr)
         
-        if self.tag:
-            attr = GenerateAttributes("Tag", System.Drawing.Color.Gray, group)
-            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.tag, attr)
+        if self.matrix_dot:
+            attr = GenerateAttributes("Matrix ID", System.Drawing.Color.Gray, group)
+            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.matrix_dot, attr)
+            
+        if self.properties_dot:
+            attr = GenerateAttributes("Properties", System.Drawing.Color.Chartreuse, group)
+            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.properties_dot, attr)
         
         if self.c1 and self.c2 and self.c3:
             attr = GenerateAttributes("Curves", System.Drawing.Color.Magenta, group)
@@ -139,12 +174,19 @@ def GenerateAttributes(layer_name, color, group):
     attribute.LayerIndex = scriptcontext.doc.Layers.Find(layer_name, True)
     
     return attribute
+    
+def frange(start, stop, step):
+    while start < stop:
+        yield start
+        start += step
 
 if __name__ ==  "__main__":
-    #todo add more user inputs...
+    Rhino.RhinoApp.ClearCommandHistoryWindow()
     test, base_geo = Rhino.Input.RhinoGet.GetOneObject("Select geo to generate objectile", False, None)
     if test == Rhino.Commands.Result.Success:
-        my_objectile = Objectile(base_geo.Curve(), 2, 45, 10)
+        my_objectile = Objectile(base_geo.Curve(), 2.0, 45.0, 10.0, 12.0)
         my_objectile.Generate()
+        my_objectile.Bake()
+        my_objectile.ExportCSV("test")
     else:
-        print("Selection failed...") 
+        print("Selection failed...")
