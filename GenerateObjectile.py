@@ -6,27 +6,33 @@ import System.Drawing
 class Objectile():
     #todo make a function which writes all the Objectile data to a spreadsheet...
     
-    def __init__(self, geo, s_max, r_max, h_max):
+    def __init__(self, geo, s_max, r_max, h_max, height):
         
-        #set user-input values
         self.base_geo = geo
+        self.height = float(height)
         
-        self.scale_max = s_max
-        self.rotation_max = r_max
-        self.height_max = h_max
+        self.scale_min = 1.0
+        self.rotation_min = 15.0
+        self.height_min = 0.0
         
-        #set default values
-        self.scale_min = 1
-        self.rotation_min = 0
-        self.height_min = 0
+        self.scale_max = float(s_max)
+        self.rotation_max = float(r_max)
+        self.height_max = float(h_max)
         
         self.scale_stepcount = 5
         self.rotation_stepcount = 5
         self.height_stepcount = 5
         
-        self.scale_stepval = (self.scale_max - self.scale_min)/self.scale_stepcount
-        self.rotation_stepval = (self.rotation_max - self.rotation_min)/self.rotation_stepcount
-        self.height_stepval = (self.height_max - self.height_min)/self.height_stepcount
+        self.scale_stepval = (self.scale_max - self.scale_min)/float(self.scale_stepcount)
+        self.rotation_stepval = (self.rotation_max - self.rotation_min)/float(self.rotation_stepcount)
+        self.height_stepval = (self.height_max - self.height_min)/float(self.height_stepcount)
+        
+        if self.height_min == 0.0:
+            self.height_min = self.height_stepval
+            self.height_stepcount = self.height_stepcount - 1
+        if self.height_max == self.height:
+            self.height_max = self.height - self.height_stepval
+            self.height_stepcount = self.height_stepcount - 1
         
         self.X_spacing = 20
         self.Y_spacing = 20
@@ -35,21 +41,20 @@ class Objectile():
         self.objects = {}
     
     def Generate(self):
-        for m in range (6):
-            #todo range(min, stepval(stepscount+1), stepval) for all loops...
-			#todo debate using xrange or frange function to work with floats
-            #todo change counters from (m,i,j,k) to (i,j,k,l), or just change to appropriate names...
-            for i in range(0, self.rotation_stepcount + 1):
-                for j in range(0, self.scale_stepcount + 1):
-                    for k in range(1, self.height_stepcount):
-                        #todo make a tuple that will contain the equipvalent of (m,i,j,k)...
-                        self.objects[(m, i, j, k-1)] = OObject(self.base_geo, (((self.scale_max - self.scale_min)/self.scale_stepcount)*j)+self.scale_min, (((self.rotation_max - self.rotation_min)/self.rotation_stepcount)*i)+self.rotation_min, (self.height_max/self.height_stepcount)*k, self.height_max, m)
-                        self.objects[(m, i, j, k-1)].Generate()
-                        self.objects[(m, i, j, k-1)].MakeTag(str((m, i, j, k-1)))
-                        self.objects[(m, i, j, k-1)].Move(self.X_spacing * i + m * (self.X_spacing * self.rotation_stepcount + self.X_spacing * 2), self.Y_spacing * (j+1), self.Z_spacing * (k-1))
-        
-        for k, object in self.objects.iteritems():
-            object.Bake(str((m, i, j, k)))
+        for f in range (1):
+            for s in frange(self.scale_min, self.scale_stepval * (self.scale_stepcount + 1) + self.scale_min, self.scale_stepval):
+                for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
+                    for h in frange(self.height_min, self.height_stepval * (self.height_stepcount + 1) + self.height_min, self.height_stepval):
+                        tag = (f, int((s-self.scale_min)/self.scale_stepval), int(r/self.rotation_stepval), int((h/self.height_stepval) - 1))
+                        #tag = (f, s, r, h)
+                        self.objects[tag] = OObject(self.base_geo, s, r, h, self.height, f)
+                        self.objects[tag].Generate()
+                        self.objects[tag].MakeTag(str(tag))
+                        self.objects[tag].Move(self.X_spacing * tag[1] + tag[0] * (self.X_spacing * self.scale_stepcount + self.X_spacing * 2), self.Y_spacing * (tag[2] + 1), self.Z_spacing * tag[3])
+        for key, object in self.objects.iteritems():
+            object.Bake(str(tag))
+    
+
 
 
 class OObject():
@@ -97,7 +102,7 @@ class OObject():
         self.surf.Flip()
     
     def MakeTag(self, label_text):
-        self.tag = Rhino.Geometry.TextDot(label_text + "\nRotation: " + str(self.rotation) + "\nScale: " + str(self.scale) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
+        self.tag = Rhino.Geometry.TextDot(label_text + "\nScale: " + str(self.scale) + "\nRotation: " + str(self.rotation) + "\nHeight: " + str(self.height), Rhino.Geometry.Point3d.Origin)
     
     def Move(self, x, y, z):
         if self.surf: 
@@ -139,12 +144,20 @@ def GenerateAttributes(layer_name, color, group):
     attribute.LayerIndex = scriptcontext.doc.Layers.Find(layer_name, True)
     
     return attribute
+    
+def frange(start, stop, step):
+    #val = start
+    while start < stop:
+        yield start
+        start += step
 
 if __name__ ==  "__main__":
     #todo add more user inputs...
+    Rhino.RhinoApp.ClearCommandHistoryWindow()
     test, base_geo = Rhino.Input.RhinoGet.GetOneObject("Select geo to generate objectile", False, None)
     if test == Rhino.Commands.Result.Success:
-        my_objectile = Objectile(base_geo.Curve(), 2, 45, 10)
+        my_objectile = Objectile(base_geo.Curve(), 2.0, 45.0, 10.0, 10.0)
         my_objectile.Generate()
     else:
-        print("Selection failed...") 
+        print("Selection failed...")
+    print("Complete!")
