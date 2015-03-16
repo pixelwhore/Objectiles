@@ -21,24 +21,28 @@ class Objectile():
         self.rotation_stepcount = 4
         self.height_stepcount = 4
         
+        self.X_spacing = 20
+        self.Y_spacing = 20
+        self.Z_spacing = 20
+        
+        self.objects = {}
+        self.export = False
+    
+    def Generate(self):
+        #generate steps
         self.scale_stepval = (self.scale_max - self.scale_min)/float(self.scale_stepcount)
         self.rotation_stepval = (self.rotation_max - self.rotation_min)/float(self.rotation_stepcount)
         self.height_stepval = (self.height_max - self.height_min)/float(self.height_stepcount)
         
+        #check shift heights before generating
         if self.height_min == 0.0:
             self.height_min = self.height_stepval
             self.height_stepcount = self.height_stepcount - 1
         if self.height_max == self.height:
             self.height_max = self.height - self.height_stepval
             self.height_stepcount = self.height_stepcount - 1
-        
-        self.X_spacing = 20
-        self.Y_spacing = 20
-        self.Z_spacing = 20
-        
-        self.objects = {}
-    
-    def Generate(self):
+            
+        #generate
         for f in range(6):
             for s in frange(self.scale_min, self.scale_stepval * (self.scale_stepcount + 1) + self.scale_min, self.scale_stepval):
                 for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
@@ -53,12 +57,12 @@ class Objectile():
         for key, object in self.objects.iteritems():
             object.Bake(str(key))
     
-    #todo make a function which writes all the Objectile data to a spreadsheet...
     def ExportCSV(self, filename):
-        with open(filename + ".csv", 'w') as file:
-            file.write("Matrix Family, Matrix X, Matrix Y, Matrix Z, Scale Value, Rotation Value, Height Value, Overall Height\n")
-            for key, object in self.objects.iteritems():
-                file.write(str(key)[1:-1] + ", " + str(object.scale) + ", " + str(object.rotation) + ", " + str(object.height) + ", " + str(object.max_height) + "\n")
+        if self.export:
+            with open(filename + ".csv", 'w') as file:
+                file.write("Matrix Family, Matrix X, Matrix Y, Matrix Z, Scale Value, Rotation Value, Height Value, Overall Height\n")
+                for key, object in self.objects.iteritems():
+                    file.write(str(key)[1:-1] + ", " + str(object.scale) + ", " + str(object.rotation) + ", " + str(object.height) + ", " + str(object.max_height) + "\n")
 
 
 class OObject():
@@ -76,6 +80,8 @@ class OObject():
         self.matrix_dot = None
         self.centroid_dot = None
         self.properties_dot = None
+        self.shift_dot = None
+        self.height_dot = None
         
     def Generate(self):
         #draw curve 1
@@ -118,8 +124,10 @@ class OObject():
         elif self.type == 2 or self.type == 4 or self.type == 5:
             loc = self.c3.PointAtStart
         
-        self.properties_dot = Rhino.Geometry.TextDot("Scale: " + str(self.scale) + "\nRotation: " + str(self.rotation) + "\nHeight: " + str(self.height), loc)
-            
+        self.properties_dot = Rhino.Geometry.TextDot("Scale: " + str(self.scale) + "\nRotation: " + str(self.rotation), loc)
+        self.shift_dot = Rhino.Geometry.TextDot("Shift: " + str(self.height), Rhino.Geometry.Point3d(0,0,self.height))
+        self.height_dot = Rhino.Geometry.TextDot("Height: " + str(self.max_height), Rhino.Geometry.Point3d(0,0,self.max_height))
+    
     def Move(self, x, y, z):
         if self.surf: 
             self.surf.Translate(x, y, z)
@@ -133,6 +141,12 @@ class OObject():
         if self.properties_dot:
             self.properties_dot.Translate(x, y, z)
         
+        if self.shift_dot:
+            self.shift_dot.Translate(x, y, z)
+            
+        if self.height_dot:
+            self.height_dot.Translate(x, y, z)
+        
         if self.c1 and self.c2 and self.c3:
             self.c1.Translate(x, y, z)
             self.c2.Translate(x, y, z)
@@ -143,25 +157,33 @@ class OObject():
         
         if self.surf:
             attr = GenerateAttributes("Surface", System.Drawing.Color.Goldenrod, group)
-            srf_guid = scriptcontext.doc.Objects.AddBrep(self.surf, attr)
+            scriptcontext.doc.Objects.AddBrep(self.surf, attr)
             
         if self.centroid_dot:
             attr = GenerateAttributes("Centroid", System.Drawing.Color.Cyan, group)
-            centroid_guid = scriptcontext.doc.Objects.AddTextDot(self.centroid_dot, attr)
+            scriptcontext.doc.Objects.AddTextDot(self.centroid_dot, attr)
         
         if self.matrix_dot:
             attr = GenerateAttributes("Matrix ID", System.Drawing.Color.Gray, group)
-            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.matrix_dot, attr)
+            scriptcontext.doc.Objects.AddTextDot(self.matrix_dot, attr)
             
         if self.properties_dot:
             attr = GenerateAttributes("Properties", System.Drawing.Color.Chartreuse, group)
-            tag_guid = scriptcontext.doc.Objects.AddTextDot(self.properties_dot, attr)
-        
+            scriptcontext.doc.Objects.AddTextDot(self.properties_dot, attr)
+            
+        if self.shift_dot:
+            attr = GenerateAttributes("Shift", System.Drawing.Color.ForestGreen, group)
+            scriptcontext.doc.Objects.AddTextDot(self.shift_dot, attr)
+            
+        if self.height_dot:
+            attr = GenerateAttributes("Height", System.Drawing.Color.Plum, group)
+            scriptcontext.doc.Objects.AddTextDot(self.height_dot, attr)
+            
         if self.c1 and self.c2 and self.c3:
             attr = GenerateAttributes("Curves", System.Drawing.Color.Magenta, group)
-            c1_guid = scriptcontext.doc.Objects.AddCurve(self.c1, attr)
-            c2_guid = scriptcontext.doc.Objects.AddCurve(self.c2, attr)
-            c3_guid = scriptcontext.doc.Objects.AddCurve(self.c3, attr)
+            scriptcontext.doc.Objects.AddCurve(self.c1, attr)
+            scriptcontext.doc.Objects.AddCurve(self.c2, attr)
+            scriptcontext.doc.Objects.AddCurve(self.c3, attr)
 
 def GenerateAttributes(layer_name, color, group):
     layer = Rhino.DocObjects.Layer()
@@ -181,12 +203,86 @@ def frange(start, stop, step):
         start += step
 
 if __name__ ==  "__main__":
-    Rhino.RhinoApp.ClearCommandHistoryWindow()
-    test, base_geo = Rhino.Input.RhinoGet.GetOneObject("Select geo to generate objectile", False, None)
-    if test == Rhino.Commands.Result.Success:
-        my_objectile = Objectile(base_geo.Curve(), 2.0, 45.0, 10.0, 12.0)
-        my_objectile.Generate()
-        my_objectile.Bake()
-        my_objectile.ExportCSV("test")
-    else:
-        print("Selection failed...")
+    #input geo & options
+    get = Rhino.Input.Custom.GetObject()
+    get.SetCommandPrompt("Select closed curve to generate objectile")
+    
+    export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
+    height_oal = Rhino.Input.Custom.OptionDouble(12.0, 5.0, 20.0)
+    
+    get.AddOptionDouble("Height", height_oal)
+    get.AddOptionToggle("Export_CSV", export_bln)
+    
+    while True:
+        result = get.Get()
+        if result==Rhino.Input.GetResult.Option:
+            continue
+        break
+    
+    #shift options
+    gh = Rhino.Input.Custom.GetOption()
+    gh.SetCommandPrompt("Set shift options")
+    
+    shift_min = Rhino.Input.Custom.OptionDouble(0.0, 0.0, 10.0)
+    shift_max = Rhino.Input.Custom.OptionDouble(5.0, 1.0, 10.0)
+    shift_steps = Rhino.Input.Custom.OptionInteger(4, 2, 9)
+    
+    gh.AddOptionDouble("Shift_Min", shift_min)
+    gh.AddOptionDouble("Shift_Max", shift_max)
+    gh.AddOptionInteger("Shift_Steps", shift_steps)
+    
+    while True:
+        result = gh.Get()
+        if result==Rhino.Input.GetResult.Option:
+            continue
+        break
+    
+    #scale options
+    gs = Rhino.Input.Custom.GetOption()
+    gs.SetCommandPrompt("Set scale options")
+    
+    scale_min = Rhino.Input.Custom.OptionDouble(1.0, 1.0, 2.0)
+    scale_max = Rhino.Input.Custom.OptionDouble(2.0, 2.0, 4.0)
+    scale_steps = Rhino.Input.Custom.OptionInteger(4, 2, 9)
+    
+    gs.AddOptionDouble("Scale_Min", scale_min)
+    gs.AddOptionDouble("Scale_Max", scale_max)
+    gs.AddOptionInteger("Scale_Steps", scale_steps)
+    
+    while True:
+        result = gs.Get()
+        if result==Rhino.Input.GetResult.Option:
+            continue
+        break
+    
+    #rotation options
+    gr = Rhino.Input.Custom.GetOption()
+    gr.SetCommandPrompt("Set rotation options")
+    
+    rotation_min = Rhino.Input.Custom.OptionDouble(0.0, 0.0, 10.0)
+    rotation_max = Rhino.Input.Custom.OptionDouble(45.0, 15.0, 90.0)
+    rotation_steps = Rhino.Input.Custom.OptionInteger(4, 2, 9)
+    
+    gr.AddOptionDouble("Rotation_Min", rotation_min)
+    gr.AddOptionDouble("Rotation_Max", rotation_max)
+    gr.AddOptionInteger("Rotation_Steps", rotation_steps)
+    
+    while True:
+        result = gr.Get()
+        if result==Rhino.Input.GetResult.Option:
+            continue
+        break
+    
+    #do the work
+    my_objectile = Objectile(get.Object(0).Curve(), scale_max.CurrentValue, rotation_max.CurrentValue, shift_max.CurrentValue, height_oal.CurrentValue)
+    my_objectile.scale_min = scale_min.CurrentValue
+    my_objectile.rotation_min = rotation_min.CurrentValue
+    my_objectile.height_min = shift_min.CurrentValue
+    my_objectile.scale_stepcount = scale_steps.CurrentValue - 1
+    my_objectile.rotation_stepcount = rotation_steps.CurrentValue - 1
+    my_objectile.height_stepcount = shift_steps.CurrentValue - 1
+    my_objectile.export = export_bln.CurrentValue
+    
+    my_objectile.Generate()
+    my_objectile.Bake()
+    my_objectile.ExportCSV("test")
