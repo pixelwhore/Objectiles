@@ -203,6 +203,10 @@ def frange(start, stop, step):
         start += step
 
 if __name__ ==  "__main__":
+    #make sure in proper units for robotics work
+    if scriptcontext.doc.ModelUnitSystem != Rhino.UnitSystem.Millimeters:
+        scriptcontext.doc.AdjustModelUnitSystem(Rhino.UnitSystem.Millimeters, True)
+
     #input geo & options
     get = Rhino.Input.Custom.GetObject()
     get.SetCommandPrompt("Select closed curve to generate objectile")
