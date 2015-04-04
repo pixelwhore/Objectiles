@@ -21,9 +21,9 @@ class Objectile():
         self.rotation_stepcount = 4
         self.height_stepcount = 4
         
-        self.X_spacing = 20
-        self.Y_spacing = 20
-        self.Z_spacing = 20
+        self.X_spacing = 500
+        self.Y_spacing = 500
+        self.Z_spacing = 500
         
         self.objects = {}
         self.export = False
@@ -212,7 +212,7 @@ if __name__ ==  "__main__":
     get.SetCommandPrompt("Select closed curve to generate objectile")
     
     export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
-    height_oal = Rhino.Input.Custom.OptionDouble(12.0, 5.0, 20.0)
+    height_oal = Rhino.Input.Custom.OptionDouble(300.0, 150.0, 500.0)
     
     get.AddOptionDouble("Height", height_oal)
     get.AddOptionToggle("Export_CSV", export_bln)
@@ -227,8 +227,8 @@ if __name__ ==  "__main__":
     gh = Rhino.Input.Custom.GetOption()
     gh.SetCommandPrompt("Set shift options")
     
-    shift_min = Rhino.Input.Custom.OptionDouble(0.0, 0.0, 10.0)
-    shift_max = Rhino.Input.Custom.OptionDouble(5.0, 1.0, 10.0)
+    shift_min = Rhino.Input.Custom.OptionDouble(0.0, 0.0, 250.0)
+    shift_max = Rhino.Input.Custom.OptionDouble(125.0, 25.0, 250.0)
     shift_steps = Rhino.Input.Custom.OptionInteger(4, 2, 9)
     
     gh.AddOptionDouble("Shift_Min", shift_min)
