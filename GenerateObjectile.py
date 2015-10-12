@@ -1,10 +1,10 @@
+
 import Rhino
 import scriptcontext
 import System.Drawing
 
-
 class Objectile():
-    def __init__(self, geo, s_max, r_max, h_max, height):
+    def __init__(self, geo, s_max, r_max, h_max, height, type):
         
         self.base_geo = geo
         self.height = float(height)
@@ -25,8 +25,11 @@ class Objectile():
         self.Y_spacing = 500
         self.Z_spacing = 500
         
+        self.type = type
+        
         self.objects = {}
         self.export = False
+        self.mark = False
     
     def Generate(self):
         #generate steps
@@ -48,34 +51,39 @@ class Objectile():
                 for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
                     for h in frange(self.height_min, self.height_stepval * (self.height_stepcount + 1) + self.height_min, self.height_stepval):
                         matrix_position = (f, int(round((s-self.scale_min)/self.scale_stepval)), int(round((r-self.rotation_min)/self.rotation_stepval)), int(round((h-self.height_min)/self.height_stepval)))
-                        self.objects[matrix_position] = OObject(self.base_geo, s, r, h, self.height, f)
+                        self.objects[matrix_position] = OObject(self.base_geo, s, r, h, self.height, f, self.type, self.shell)
                         self.objects[matrix_position].Generate()
-                        self.objects[matrix_position].MarkProperties(str(matrix_position))
+                        if self.mark:
+                            self.objects[matrix_position].MarkProperties(str(matrix_position))
                         self.objects[matrix_position].Move(self.X_spacing * matrix_position[1] + matrix_position[0] * (self.X_spacing * self.scale_stepcount + self.X_spacing * 2), self.Y_spacing * (matrix_position[2] + 1), self.Z_spacing * matrix_position[3])
         
     def Bake(self):
         for key, object in self.objects.iteritems():
             object.Bake(str(key))
-    
+            
     def ExportCSV(self, filename):
         if self.export:
             with open(filename + ".csv", 'w') as file:
-                file.write("Matrix Family, Matrix X, Matrix Y, Matrix Z, Scale Value, Rotation Value, Height Value, Overall Height\n")
+                file.write("Matrix Family, Matrix X, Matrix Y, Matrix Z, Scale Value, Rotation Value, Height Value, Overall Height, Geometry Type, Shell Thickness\n")
                 for key, object in self.objects.iteritems():
-                    file.write(str(key)[1:-1] + ", " + str(object.scale) + ", " + str(object.rotation) + ", " + str(object.height) + ", " + str(object.max_height) + "\n")
+                    file.write(str(key)[1:-1] + ", " + str(object.scale) + ", " + str(object.rotation) + ", " + str(object.height) + ", " + str(object.max_height) + ", " + str(object.geo_type) + ", " + str(object.thickness) + "\n")
 
 
 class OObject():
     
-    def __init__(self, geo, s_val, r_val, h_val, h_max, type):
-        self.geometry = geo.Duplicate()
+    def __init__(self, geo, s_val, r_val, h_val, h_max, type, geo_type, shell):
+        self.geometry = []
+        for in_geo in geo:
+            self.geometry.append(in_geo.Duplicate())
         
         self.scale = s_val
         self.rotation = r_val
         self.height = h_val
         self.max_height = h_max
+        self.thickness = shell
         
         self.type = type
+        self.geo_type = geo_type
         
         self.matrix_dot = None
         self.centroid_dot = None
@@ -84,35 +92,54 @@ class OObject():
         self.height_dot = None
         
     def Generate(self):
+        #handle curve assignment based on geometry input
+        if len(self.geometry) <= 2:
+            self.c1 = self.geometry[0].Duplicate()
+            self.c2 = self.geometry[0].Duplicate()
+            self.c3 = self.geometry[0].Duplicate()
+        else:
+            self.c1 = self.geometry[0].Duplicate()
+            self.c2 = self.geometry[1].Duplicate()
+            self.c3 = self.geometry[2].Duplicate()
+            
         #draw curve 1
         if self.type == 0 or self.type == 3 or self.type == 5:
-            self.c1 = self.geometry.Duplicate()
             self.c1.Scale(self.scale)
             self.c1.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
-        else:
-            self.c1 = self.geometry
-
         #draw curve 2
-        self.c2 = self.geometry.Duplicate()
         if self.type == 1 or self.type == 3 or self.type == 4:
             self.c2.Scale(self.scale)
             self.c2.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
             self.c2.Translate(0,0,self.height)
         else:
             self.c2.Translate(0,0,self.height)
-        
         #draw curve 3
-        self.c3 = self.geometry.Duplicate()
         if self.type == 2 or self.type == 4 or self.type == 5:
             self.c3.Scale(self.scale)
             self.c3.Rotate(Rhino.RhinoMath.ToRadians(self.rotation),Rhino.Geometry.Vector3d(0,0,1),Rhino.Geometry.Point3d(0,0,0))
             self.c3.Translate(0,0,self.max_height)
         else:
-            self.c3.Translate(0,0,self.max_height) 
+            self.c3.Translate(0,0,self.max_height)
             
+        #generate primary surface
         self.surf = Rhino.Geometry.Brep.CreateFromLoft([self.c1, self.c2, self.c3], Rhino.Geometry.Point3d.Unset, Rhino.Geometry.Point3d.Unset, Rhino.Geometry.LoftType.Straight, False)[0]
         self.surf.Flip()
-    
+        
+        if self.geo_type == "solid": 
+            self.surf = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+            
+        if self.geo_type == "shell":
+            self.surf = Rhino.Geometry.Brep.CreateFromOffsetFace(self.surf.Faces[0], -self.thickness, scriptcontext.doc.ModelAbsoluteTolerance, False, True)
+            
+            self.test_surf = self.surf.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,0),Rhino.Geometry.Vector3d(0,0,-1)),scriptcontext.doc.ModelAbsoluteTolerance)
+            if self.test_surf:
+                self.test_surf = self.test_surf[0].CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+                self.test_surf2 = self.test_surf.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,self.max_height),Rhino.Geometry.Vector3d(0,0,1)),scriptcontext.doc.ModelAbsoluteTolerance)
+                if self.test_surf2:
+                    self.surf = self.test_surf2[0].CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+                else:
+                    self.surf = self.test_surf
+        
     def MarkProperties(self, label_text):
         self.matrix_dot = Rhino.Geometry.TextDot(str(label_text)[1:-1], Rhino.Geometry.Point3d.Origin)
         self.centroid_dot = Rhino.Geometry.TextDot("Centroid", Rhino.Geometry.VolumeMassProperties.Compute(self.surf).Centroid)
@@ -151,7 +178,7 @@ class OObject():
             self.c1.Translate(x, y, z)
             self.c2.Translate(x, y, z)
             self.c3.Translate(x, y, z)
-    
+            
     def Bake(self, group_name):
         group = scriptcontext.doc.Groups.Add(group_name)
         
@@ -184,7 +211,9 @@ class OObject():
             scriptcontext.doc.Objects.AddCurve(self.c1, attr)
             scriptcontext.doc.Objects.AddCurve(self.c2, attr)
             scriptcontext.doc.Objects.AddCurve(self.c3, attr)
-
+            
+        
+        
 def GenerateAttributes(layer_name, color, group):
     layer = Rhino.DocObjects.Layer()
     layer.Name = layer_name
@@ -210,16 +239,24 @@ if __name__ ==  "__main__":
     #input geo & options
     get = Rhino.Input.Custom.GetObject()
     get.SetCommandPrompt("Select closed curve to generate objectile")
+    get.AcceptNothing(False)
     
-    export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
     height_oal = Rhino.Input.Custom.OptionDouble(300.0, 150.0, 500.0)
+    geo_output = ("surface", "shell", "solid")
+    export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
+    mark_bln = Rhino.Input.Custom.OptionToggle(True, "Off", "On")
     
     get.AddOptionDouble("Height", height_oal)
+    type_index = get.AddOptionList("Output_Geo", geo_output, 0)
+    get.AddOptionToggle("Property_Dots", mark_bln)
     get.AddOptionToggle("Export_CSV", export_bln)
     
+    geo_type = geo_output[0]
     while True:
-        result = get.Get()
+        result = get.GetMultiple(1, 3)
         if result==Rhino.Input.GetResult.Option:
+            if get.OptionIndex() == type_index:
+                geo_type = geo_output[get.Option().CurrentListOptionIndex]
             continue
         break
     
@@ -277,8 +314,27 @@ if __name__ ==  "__main__":
             continue
         break
     
+    #shell options
+    if geo_type == "shell":
+        getsh = Rhino.Input.Custom.GetOption()
+        getsh.SetCommandPrompt("Set shell options")
+        
+        shell_thick = Rhino.Input.Custom.OptionDouble(5.0, 5.0, 10.0)
+        
+        getsh.AddOptionDouble("Thickness", shell_thick)
+        
+        while True:
+            result = getsh.Get()
+            if result==Rhino.Input.GetResult.Option:
+                continue
+            break
+    
+    geo_input = []
+    for x in range(get.ObjectCount):
+        geo_input.append(get.Object(x).Curve())
+    
     #do the work
-    my_objectile = Objectile(get.Object(0).Curve(), scale_max.CurrentValue, rotation_max.CurrentValue, shift_max.CurrentValue, height_oal.CurrentValue)
+    my_objectile = Objectile(geo_input, scale_max.CurrentValue, rotation_max.CurrentValue, shift_max.CurrentValue, height_oal.CurrentValue, geo_type)
     my_objectile.scale_min = scale_min.CurrentValue
     my_objectile.rotation_min = rotation_min.CurrentValue
     my_objectile.height_min = shift_min.CurrentValue
@@ -286,7 +342,12 @@ if __name__ ==  "__main__":
     my_objectile.rotation_stepcount = rotation_steps.CurrentValue - 1
     my_objectile.height_stepcount = shift_steps.CurrentValue - 1
     my_objectile.export = export_bln.CurrentValue
-    
+    my_objectile.mark = mark_bln.CurrentValue
+    try:
+        my_objectile.shell = shell_thick.CurrentValue
+    except:
+        my_objectile.shell = 0
+        
     my_objectile.Generate()
     my_objectile.Bake()
     my_objectile.ExportCSV("test")
