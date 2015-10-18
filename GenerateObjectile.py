@@ -1,4 +1,5 @@
 
+
 import Rhino
 import scriptcontext
 import System.Drawing
@@ -45,8 +46,9 @@ class Objectile():
             self.height_max = self.height - self.height_stepval
             self.height_stepcount = self.height_stepcount - 1
             
-        #generate
-        for f in range(6):
+        #generate - should be range(6) for full run
+        for f in range(1):
+        #f = 0
             for s in frange(self.scale_min, self.scale_stepval * (self.scale_stepcount + 1) + self.scale_min, self.scale_stepval):
                 for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
                     for h in frange(self.height_min, self.height_stepval * (self.height_stepcount + 1) + self.height_min, self.height_stepval):
@@ -56,7 +58,7 @@ class Objectile():
                         if self.mark:
                             self.objects[matrix_position].MarkProperties(str(matrix_position))
                         self.objects[matrix_position].Move(self.X_spacing * matrix_position[1] + matrix_position[0] * (self.X_spacing * self.scale_stepcount + self.X_spacing * 2), self.Y_spacing * (matrix_position[2] + 1), self.Z_spacing * matrix_position[3])
-        
+            
     def Bake(self):
         for key, object in self.objects.iteritems():
             object.Bake(str(key))
@@ -93,14 +95,18 @@ class OObject():
         
     def Generate(self):
         #handle curve assignment based on geometry input
-        if len(self.geometry) <= 2:
+        if len(self.geometry) == 2:
+            self.c1 = self.geometry[0].Duplicate()
+            self.c2 = self.geometry[1].Duplicate()
+            self.c3 = self.geometry[0].Duplicate()
+        elif len(self.geometry) == 3:
+            self.c1 = self.geometry[0].Duplicate()
+            self.c2 = self.geometry[1].Duplicate()
+            self.c3 = self.geometry[2].Duplicate() 
+        else:
             self.c1 = self.geometry[0].Duplicate()
             self.c2 = self.geometry[0].Duplicate()
             self.c3 = self.geometry[0].Duplicate()
-        else:
-            self.c1 = self.geometry[0].Duplicate()
-            self.c2 = self.geometry[1].Duplicate()
-            self.c3 = self.geometry[2].Duplicate()
             
         #draw curve 1
         if self.type == 0 or self.type == 3 or self.type == 5:
@@ -129,17 +135,19 @@ class OObject():
             self.surf = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
             
         if self.geo_type == "shell":
-            self.surf = Rhino.Geometry.Brep.CreateFromOffsetFace(self.surf.Faces[0], -self.thickness, scriptcontext.doc.ModelAbsoluteTolerance, False, True)
+            tempface = Rhino.Geometry.Brep.CreateFromOffsetFace(self.surf.Faces[0], -self.thickness, scriptcontext.doc.ModelAbsoluteTolerance, False, False).Faces[0]
+            tempface = tempface.Extend(Rhino.Geometry.IsoStatus.East, 50, True).Extend(Rhino.Geometry.IsoStatus.West, 50, True)
+            tempbrep1 = Rhino.Geometry.Brep.CreateFromSurface(tempface)
+            tempbrep1 = tempbrep1.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,-5),Rhino.Geometry.Vector3d(0,0,-1)),scriptcontext.doc.ModelAbsoluteTolerance)
+            tempbrep1 = tempbrep1[0].Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,self.max_height + 5),Rhino.Geometry.Vector3d(0,0,1)),scriptcontext.doc.ModelAbsoluteTolerance)
+            tempbrep1 = tempbrep1[0]
+            tempbrep1 = tempbrep1.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+            tempbrep1.Flip()
+            tempbrep2 = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+                
+            self.surf = Rhino.Geometry.Brep.CreateBooleanDifference(tempbrep2, tempbrep1, 0.0005)
+            self.surf = self.surf[0]
             
-            self.test_surf = self.surf.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,0),Rhino.Geometry.Vector3d(0,0,-1)),scriptcontext.doc.ModelAbsoluteTolerance)
-            if self.test_surf:
-                self.test_surf = self.test_surf[0].CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
-                self.test_surf2 = self.test_surf.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,self.max_height),Rhino.Geometry.Vector3d(0,0,1)),scriptcontext.doc.ModelAbsoluteTolerance)
-                if self.test_surf2:
-                    self.surf = self.test_surf2[0].CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
-                else:
-                    self.surf = self.test_surf
-        
     def MarkProperties(self, label_text):
         self.matrix_dot = Rhino.Geometry.TextDot(str(label_text)[1:-1], Rhino.Geometry.Point3d.Origin)
         self.centroid_dot = Rhino.Geometry.TextDot("Centroid", Rhino.Geometry.VolumeMassProperties.Compute(self.surf).Centroid)
@@ -244,7 +252,7 @@ if __name__ ==  "__main__":
     height_oal = Rhino.Input.Custom.OptionDouble(300.0, 150.0, 500.0)
     geo_output = ("surface", "shell", "solid")
     export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
-    mark_bln = Rhino.Input.Custom.OptionToggle(True, "Off", "On")
+    mark_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
     
     get.AddOptionDouble("Height", height_oal)
     type_index = get.AddOptionList("Output_Geo", geo_output, 0)
