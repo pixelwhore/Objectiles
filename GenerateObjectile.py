@@ -257,7 +257,7 @@ if __name__ ==  "__main__":
         result = get.GetMultiple(1,3)
         break
     
-    # options
+    #general options
     go = Rhino.Input.Custom.GetOption()
     go.SetCommandPrompt("Set general options")
     
