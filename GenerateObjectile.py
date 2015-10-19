@@ -27,6 +27,7 @@ class Objectile():
         self.Z_spacing = 500
         
         self.type = type
+        self.families = 1
         
         self.objects = {}
         self.export = False
@@ -46,9 +47,8 @@ class Objectile():
             self.height_max = self.height - self.height_stepval
             self.height_stepcount = self.height_stepcount - 1
             
-        #generate - should be range(6) for full run
-        for f in range(1):
-        #f = 0
+        #generate - full run = range (6), but can be made more/less depending on timing via option input in main()
+        for f in range(self.families):
             for s in frange(self.scale_min, self.scale_stepval * (self.scale_stepcount + 1) + self.scale_min, self.scale_stepval):
                 for r in frange(self.rotation_min, self.rotation_stepval * (self.rotation_stepcount + 1) + self.rotation_min, self.rotation_stepval):
                     for h in frange(self.height_min, self.height_stepval * (self.height_stepcount + 1) + self.height_min, self.height_stepval):
@@ -135,18 +135,22 @@ class OObject():
             self.surf = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
             
         if self.geo_type == "shell":
-            tempface = Rhino.Geometry.Brep.CreateFromOffsetFace(self.surf.Faces[0], -self.thickness, scriptcontext.doc.ModelAbsoluteTolerance, False, False).Faces[0]
-            tempface = tempface.Extend(Rhino.Geometry.IsoStatus.East, 50, True).Extend(Rhino.Geometry.IsoStatus.West, 50, True)
-            tempbrep1 = Rhino.Geometry.Brep.CreateFromSurface(tempface)
-            tempbrep1 = tempbrep1.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,-5),Rhino.Geometry.Vector3d(0,0,-1)),scriptcontext.doc.ModelAbsoluteTolerance)
-            tempbrep1 = tempbrep1[0].Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,self.max_height + 5),Rhino.Geometry.Vector3d(0,0,1)),scriptcontext.doc.ModelAbsoluteTolerance)
-            tempbrep1 = tempbrep1[0]
-            tempbrep1 = tempbrep1.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
-            tempbrep1.Flip()
-            tempbrep2 = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
-                
-            self.surf = Rhino.Geometry.Brep.CreateBooleanDifference(tempbrep2, tempbrep1, 0.0005)
-            self.surf = self.surf[0]
+            try:
+                tempface = Rhino.Geometry.Brep.CreateFromOffsetFace(self.surf.Faces[0], -self.thickness, scriptcontext.doc.ModelAbsoluteTolerance, False, False).Faces[0]
+                tempface = tempface.Extend(Rhino.Geometry.IsoStatus.East, 50, True).Extend(Rhino.Geometry.IsoStatus.West, 50, True)
+                tempbrep1 = Rhino.Geometry.Brep.CreateFromSurface(tempface)
+                tempbrep1 = tempbrep1.Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,-5),Rhino.Geometry.Vector3d(0,0,-1)),scriptcontext.doc.ModelAbsoluteTolerance)
+                tempbrep1 = tempbrep1[0].Trim(Rhino.Geometry.Plane(Rhino.Geometry.Point3d(0,0,self.max_height + 5),Rhino.Geometry.Vector3d(0,0,1)),scriptcontext.doc.ModelAbsoluteTolerance)
+                tempbrep1 = tempbrep1[0]
+                tempbrep1 = tempbrep1.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+                tempbrep1.Flip()
+                tempbrep2 = self.surf.CapPlanarHoles(scriptcontext.doc.ModelAbsoluteTolerance)
+                    
+                self.surf = Rhino.Geometry.Brep.CreateBooleanDifference(tempbrep2, tempbrep1, 0.0005)
+                self.surf = self.surf[0]
+            except:
+                print("Unable to shell geometry")
+                exit()
             
     def MarkProperties(self, label_text):
         self.matrix_dot = Rhino.Geometry.TextDot(str(label_text)[1:-1], Rhino.Geometry.Point3d.Origin)
@@ -244,27 +248,38 @@ if __name__ ==  "__main__":
     if scriptcontext.doc.ModelUnitSystem != Rhino.UnitSystem.Millimeters:
         scriptcontext.doc.AdjustModelUnitSystem(Rhino.UnitSystem.Millimeters, True)
 
-    #input geo & options
+    #input geo 
     get = Rhino.Input.Custom.GetObject()
-    get.SetCommandPrompt("Select closed curve to generate objectile")
+    get.SetCommandPrompt("Select closed curves to generate objectile")
     get.AcceptNothing(False)
+    
+    while True:
+        result = get.GetMultiple(1,3)
+        break
+    
+    # options
+    go = Rhino.Input.Custom.GetOption()
+    go.SetCommandPrompt("Set general options")
     
     height_oal = Rhino.Input.Custom.OptionDouble(300.0, 150.0, 500.0)
     geo_output = ("surface", "shell", "solid")
+    family_count = Rhino.Input.Custom.OptionInteger(6, 1, 6)
     export_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
     mark_bln = Rhino.Input.Custom.OptionToggle(False, "Off", "On")
     
-    get.AddOptionDouble("Height", height_oal)
-    type_index = get.AddOptionList("Output_Geo", geo_output, 0)
-    get.AddOptionToggle("Property_Dots", mark_bln)
-    get.AddOptionToggle("Export_CSV", export_bln)
+    go.AddOptionDouble("Height", height_oal)
+    type_index = go.AddOptionList("Output_Geo", geo_output, 0)
+    go.AddOptionInteger("Families", family_count)
+    go.AddOptionToggle("Property_Dots", mark_bln)
+    go.AddOptionToggle("Export_CSV", export_bln)
     
     geo_type = geo_output[0]
     while True:
-        result = get.GetMultiple(1, 3)
-        if result==Rhino.Input.GetResult.Option:
-            if get.OptionIndex() == type_index:
-                geo_type = geo_output[get.Option().CurrentListOptionIndex]
+        result = go.Get()
+        if result == Rhino.Input.GetResult.Option:
+            if go.OptionIndex() == type_index:
+                geo_type = geo_output[go.Option().CurrentListOptionIndex]
+                print("Warning - shell option may take time to run")
             continue
         break
     
@@ -282,7 +297,7 @@ if __name__ ==  "__main__":
     
     while True:
         result = gh.Get()
-        if result==Rhino.Input.GetResult.Option:
+        if result == Rhino.Input.GetResult.Option:
             continue
         break
     
@@ -300,7 +315,7 @@ if __name__ ==  "__main__":
     
     while True:
         result = gs.Get()
-        if result==Rhino.Input.GetResult.Option:
+        if result == Rhino.Input.GetResult.Option:
             continue
         break
     
@@ -333,7 +348,7 @@ if __name__ ==  "__main__":
         
         while True:
             result = getsh.Get()
-            if result==Rhino.Input.GetResult.Option:
+            if result == Rhino.Input.GetResult.Option:
                 continue
             break
     
@@ -351,6 +366,7 @@ if __name__ ==  "__main__":
     my_objectile.height_stepcount = shift_steps.CurrentValue - 1
     my_objectile.export = export_bln.CurrentValue
     my_objectile.mark = mark_bln.CurrentValue
+    my_objectile.families = family_count.CurrentValue
     try:
         my_objectile.shell = shell_thick.CurrentValue
     except:
